@@ -55,22 +55,33 @@ jobs:
               rest = data.loc[~mask]
               up_event = int((sample['pamp_next_return'] > 0).sum())
               down_event = int((sample['pamp_next_return'] < 0).sum())
+              flat_event = len(sample) - up_event - down_event
               up_rest = int((rest['pamp_next_return'] > 0).sum())
               down_rest = int((rest['pamp_next_return'] < 0).sum())
+              flat_rest = len(rest) - up_rest - down_rest
+              nonflat_event = up_event + down_event
+              nonflat_rest = up_rest + down_rest
               if len(sample):
-                  odds, p_value = fisher_exact([[up_event, down_event], [up_rest, down_rest]])
+                  if nonflat_event and nonflat_rest:
+                      odds, p_value = fisher_exact([[up_event, down_event], [up_rest, down_rest]])
+                  else:
+                      odds, p_value = None, None
                   results[label] = {
                       'n_events': len(sample),
                       'pamp_up_next_session': up_event / len(sample),
                       'pamp_down_next_session': down_event / len(sample),
+                      'pamp_unchanged_next_session': flat_event / len(sample),
                       'mean_pamp_next_return_pct': float(sample['pamp_next_return'].mean() * 100),
                       'median_pamp_next_return_pct': float(sample['pamp_next_return'].median() * 100),
                       'baseline_n': len(rest),
                       'baseline_pamp_up': up_rest / len(rest) if len(rest) else None,
                       'baseline_pamp_down': down_rest / len(rest) if len(rest) else None,
-                      'fisher_p_value_vs_baseline': float(p_value),
-                      'odds_ratio_for_pamp_up_vs_baseline': float(odds),
-                      'contingency_up_down': [[up_event, down_event], [up_rest, down_rest]],
+                      'baseline_pamp_unchanged': flat_rest / len(rest) if len(rest) else None,
+                      'nonflat_event_n_for_fisher': nonflat_event,
+                      'nonflat_baseline_n_for_fisher': nonflat_rest,
+                      'fisher_p_value_vs_baseline_nonflat_direction': float(p_value) if p_value is not None else None,
+                      'odds_ratio_for_pamp_up_vs_baseline_nonflat_direction': float(odds) if odds is not None else None,
+                      'contingency_up_down_excluding_unchanged': [[up_event, down_event], [up_rest, down_rest]],
                   }
               else:
                   results[label] = {'n_events': 0, 'note': 'No events in the aligned sample.'}
@@ -80,7 +91,7 @@ jobs:
               'period': {'start': str(data.index.min().date()), 'end': str(data.index.max().date())},
               'aligned_observations': len(data),
               'data_sources': {'Brent': 'Yahoo Finance BZ=F, adjusted daily close', 'PAMP': 'Yahoo Finance PAMP.BA, adjusted daily close'},
-              'method': 'Close-to-close daily returns. Signal is Brent return on date t; outcome is PAMP return at its next available aligned session (close t to next aligned close). Threshold is strict: >10% or <-10%. Fisher exact compares next-session PAMP direction after event days with all other aligned days.',
+              'method': 'Close-to-close daily returns. Signal is Brent return on date t; outcome is PAMP return at its next available aligned session (close t to next aligned close). Threshold is strict: >10% or <-10%. Direction percentages use all observations, including unchanged closes. Fisher exact compares up vs down only, excluding unchanged closes in both groups.',
               'results': results,
               'caveat': 'Exploratory association only. Rare-event counts may be small; this does not establish causality, out-of-sample stability, or a tradable strategy.',
           }
