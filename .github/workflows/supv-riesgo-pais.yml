@@ -1,0 +1,72 @@
+name: SUPV vs Merval vs riesgo pais
+on:
+  push:
+    paths:
+      - '.github/workflows/supv-riesgo-pais.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  hypothesis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - run: pip install pandas requests yfinance scipy
+      - name: Test SUPV relative strength vs next risk-country move
+        shell: python
+        run: |
+          import json, requests, pandas as pd, yfinance as yf
+          from scipy.stats import fisher_exact
+          from pathlib import Path
+          url='https://api.argentinadatos.com/v1/finanzas/indices/riesgo-pais'
+          response=requests.get(url,timeout=40); response.raise_for_status()
+          raw=response.json()
+          if not isinstance(raw,list) or not raw: raise RuntimeError('No risk-country observations')
+          risk=pd.DataFrame(raw)
+          print('Risk-country fields:',list(risk.columns))
+          date_col=next((c for c in ['fecha','date'] if c in risk),None)
+          value_col=next((c for c in ['valor','value','riesgoPais'] if c in risk),None)
+          if not date_col or not value_col: raise RuntimeError('Unexpected risk-country schema')
+          risk=risk[[date_col,value_col]].rename(columns={date_col:'date',value_col:'risk'})
+          risk['date']=pd.to_datetime(risk['date'],errors='coerce').dt.normalize()
+          risk['risk']=pd.to_numeric(risk['risk'],errors='coerce')
+          risk=risk.dropna().drop_duplicates('date',keep='last').set_index('date').sort_index()
+          end=pd.Timestamp.now(tz='UTC').strftime('%Y-%m-%d')
+          tickers=['SUPV.BA','^MERV','GGAL.BA','BMA.BA']
+          prices={}
+          for ticker in tickers:
+              frame=yf.download(ticker,start='2018-01-01',end=end,auto_adjust=True,progress=False,threads=False)
+              if frame.empty: raise RuntimeError(f'No prices for {ticker}')
+              close=frame['Close']
+              if isinstance(close,pd.DataFrame): close=close.iloc[:,0]
+              close.index=pd.to_datetime(close.index).tz_localize(None).normalize()
+              prices[ticker]=close.rename(ticker)
+          merged=pd.concat([*prices.values(),risk['risk']],axis=1,join='inner').dropna().sort_index()
+          if len(merged)<150: raise RuntimeError(f'Insufficient common observations: {len(merged)}')
+          returns=merged[tickers].pct_change(fill_method=None)
+          # Next risk-country observation after signal day; no future information in signal.
+          next_risk_change=merged['risk'].shift(-1)-merged['risk']
+          results={}
+          for ticker in ['SUPV.BA','GGAL.BA','BMA.BA']:
+              valid=pd.DataFrame({'signal':returns[ticker]>returns['^MERV'],'risk_down_next':next_risk_change<0,'risk_delta_next':next_risk_change}).dropna()
+              valid=valid.iloc[1:]
+              valid=valid.loc[next_risk_change.loc[valid.index].notna()]
+              if len(valid)<100: raise RuntimeError(f'Insufficient aligned rows for {ticker}')
+              a=int((valid.signal & valid.risk_down_next).sum())
+              b=int((valid.signal & ~valid.risk_down_next).sum())
+              c=int((~valid.signal & valid.risk_down_next).sum())
+              d=int((~valid.signal & ~valid.risk_down_next).sum())
+              odds,p=fisher_exact([[a,b],[c,d]])
+              results[ticker]={'observations':len(valid),'signal_days':a+b,'p_down_given_signal':a/(a+b) if a+b else None,'p_down_without_signal':c/(c+d) if c+d else None,'fisher_p_value':p,'odds_ratio':odds,'contingency':[[a,b],[c,d]]}
+          out={'hypothesis':'Bank outperforms Merval today -> risk country falls next observation','start':str(merged.index.min().date()),'end':str(merged.index.max().date()),'data_sources':{'prices':'Yahoo Finance yfinance adjusted daily','risk_country':url},'alignment':'intersection of dates; next observed risk-country point','results':results,'caveat':'Exploratory association, not causal or tradable signal. Check out-of-sample and fees.'}
+          Path('supv_riesgo_pais_results.json').write_text(json.dumps(out,indent=2))
+          print(json.dumps(out,indent=2))
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: supv-riesgo-pais-results
+          path: supv_riesgo_pais_results.json
+          if-no-files-found: warn
