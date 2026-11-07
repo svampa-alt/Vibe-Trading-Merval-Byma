@@ -136,15 +136,48 @@
       "alpha_spending_boundary": 0.0005555555555555556,
       "same_edge_sign_train_test": true,
       "failure_reason": "Did not meet the predeclared sequential holdout threshold and same-sign rule."
+    },
+    {
+      "candidate_id": "3fde2ae13d01be6a",
+      "source": "BMA.BA",
+      "target": "SUPV.BA",
+      "direction": "up",
+      "threshold_pct": 1.5,
+      "horizon_sessions": 10,
+      "run_key": "manual-2026-11-07T1102Z-0wgq05e0h1klmw6aqn78",
+      "seed": "seed-waerwxbxu5mw6aqn78",
+      "selected_at_utc": "2026-11-07T11:05:03.004660+00:00",
+      "data_source": "Yahoo Finance adjusted daily close",
+      "aligned_start": "2016-05-19",
+      "aligned_end": "2026-11-06",
+      "hypothesis": "If BMA rises more than 1.5%, SUPV return over the next 10 aligned sessions differs from its non-event baseline.",
+      "train_event_n": 325,
+      "train_baseline_n": 791,
+      "test_event_n": 474,
+      "test_baseline_n": 946,
+      "status": "failed_holdout_rule",
+      "train_event_mean_pct": 1.2519396034836714,
+      "train_baseline_mean_pct": 1.637813067881019,
+      "train_edge_pct": -0.3858734643973476,
+      "train_p_raw": 0.6627293073351975,
+      "test_event_mean_pct": 4.867046308869911,
+      "test_baseline_mean_pct": 2.9984541059682663,
+      "test_edge_pct": 1.8685922029016442,
+      "test_p_raw": 0.042968322200200415,
+      "test_index_for_alpha_spending": 10,
+      "alpha_spending_boundary": 0.00045454545454545455,
+      "same_edge_sign_train_test": false,
+      "failure_reason": "Did not meet the predeclared sequential holdout threshold and same-sign rule."
     }
   ],
   "processed_run_keys": [
     "setup-2026-11-06-01",
-    "manual-test-2026-11-06-01"
+    "manual-test-2026-11-06-01",
+    "manual-2026-11-07T1102Z-0wgq05e0h1klmw6aqn78"
   ],
   "candidate_pool_size": 2700,
-  "candidate_pool_remaining": 2698,
-  "last_run_key": "manual-test-2026-11-06-01",
-  "last_updated_utc": "2026-11-07T02:27:14.883557+00:00",
+  "candidate_pool_remaining": 2697,
+  "last_run_key": "manual-2026-11-07T1102Z-0wgq05e0h1klmw6aqn78",
+  "last_updated_utc": "2026-11-07T11:05:03.853588+00:00",
   "method": "Random selection without replacement from a predeclared pool. Every outcome, including failures, is stored. Holdout p-values use alpha spending 0.05/[i(i+1)] and must retain the training edge sign."
 }
