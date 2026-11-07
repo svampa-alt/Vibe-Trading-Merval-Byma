@@ -83,12 +83,35 @@
       "horizon_sessions": 1,
       "status": "failed_holdout_rule",
       "failure_reason": "Train p=0.0055, but adjusted train q=0.813; holdout edge +0.26 pp, p=0.294."
+    },
+    {
+      "candidate_id": "a540b35ff48c4f8e",
+      "source": "SPY",
+      "target": "GC=F",
+      "direction": "down",
+      "threshold_pct": 7.0,
+      "horizon_sessions": 4,
+      "run_key": "setup-2026-11-06-01",
+      "seed": "2026-11-06-initial-seed-01",
+      "selected_at_utc": "2026-11-07T02:24:19.933829+00:00",
+      "data_source": "Yahoo Finance adjusted daily close",
+      "aligned_start": "2010-01-04",
+      "aligned_end": "2026-11-06",
+      "hypothesis": "If S&P 500 ETF falls more than 7.0%, Gold return over the next 4 aligned sessions differs from its non-event baseline.",
+      "train_event_n": 3,
+      "train_baseline_n": 2759,
+      "test_event_n": 0,
+      "test_baseline_n": 1465,
+      "status": "failed_insufficient_training_sample",
+      "failure_reason": "Training events or baseline are below the predeclared minimum."
     }
   ],
-  "processed_run_keys": [],
+  "processed_run_keys": [
+    "setup-2026-11-06-01"
+  ],
   "candidate_pool_size": 2700,
-  "candidate_pool_remaining": 2700,
-  "last_run_key": null,
-  "last_updated_utc": null,
-  "method": "Random selection without replacement from a predeclared candidate pool. Every outcome, including failures, is stored. Holdout p-values use alpha spending 0.05/[i(i+1)] and must retain the training edge sign."
+  "candidate_pool_remaining": 2699,
+  "last_run_key": "setup-2026-11-06-01",
+  "last_updated_utc": "2026-11-07T02:24:21.160529+00:00",
+  "method": "Random selection without replacement from a predeclared pool. Every outcome, including failures, is stored. Holdout p-values use alpha spending 0.05/[i(i+1)] and must retain the training edge sign."
 }
