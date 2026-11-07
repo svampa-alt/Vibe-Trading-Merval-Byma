@@ -1,0 +1,206 @@
+name: Cross-asset hypothesis discovery pilot
+on:
+  push:
+    paths:
+      - '.github/workflows/cross-asset-discovery-pilot.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - run: pip install pandas yfinance scipy
+      - name: Generate and validate cross-asset candidates
+        shell: python
+        run: |
+          import json
+          import math
+          from pathlib import Path
+          import pandas as pd
+          import yfinance as yf
+          from scipy.stats import ttest_ind
+
+          UNIVERSE = {
+              'PAMP.BA': 'PAMP',
+              'ALUA.BA': 'ALUA',
+              'BMA.BA': 'BMA',
+              'GGAL.BA': 'GGAL',
+              'SUPV.BA': 'SUPV',
+              '^MERV': 'Merval',
+              'BZ=F': 'Brent',
+              'GC=F': 'Gold',
+              'SPY': 'S&P 500 ETF',
+              'EWZ': 'Brazil ETF',
+          }
+          START = '2010-01-01'
+          CUTOFF = pd.Timestamp('2020-12-31')
+          THRESHOLDS = (0.025, 0.04, 0.06, 0.08)
+          HORIZONS = (1, 3, 5)
+          MIN_TRAIN_EVENTS = 20
+          MIN_TEST_EVENTS = 10
+          FDR_Q = 0.10
+
+          def bh_adjust(p_values):
+              p = pd.Series(p_values, dtype=float)
+              order = p.sort_values().index
+              ranked = p.loc[order].to_numpy()
+              m = len(ranked)
+              adjusted = (ranked * m / pd.Series(range(1, m + 1), dtype=float).to_numpy())
+              adjusted = pd.Series(adjusted).cummin().iloc[::-1].cummin().iloc[::-1].to_numpy()
+              out = pd.Series(index=p.index, dtype=float)
+              out.loc[order] = adjusted.clip(0, 1)
+              return out
+
+          close = {}
+          for ticker in UNIVERSE:
+              frame = yf.download(ticker, start=START, auto_adjust=True, progress=False, threads=False)
+              if frame.empty:
+                  raise RuntimeError(f'No Yahoo Finance daily data for {ticker}')
+              series = frame['Close']
+              if isinstance(series, pd.DataFrame):
+                  series = series.iloc[:, 0]
+              series.index = pd.to_datetime(series.index).tz_localize(None).normalize()
+              close[ticker] = series.rename(ticker)
+
+          prices = pd.concat(close.values(), axis=1, join='inner').dropna().sort_index()
+          if len(prices) < 500:
+              raise RuntimeError(f'Insufficient common observations after aligning all tickers: {len(prices)}')
+          returns = prices.pct_change(fill_method=None)
+          future_dates = pd.Series(prices.index, index=prices.index).shift(-max(HORIZONS))
+          train_mask_by_horizon = {}
+          test_mask_by_horizon = {}
+          for h in HORIZONS:
+              end_dates = pd.Series(prices.index, index=prices.index).shift(-h)
+              train_mask_by_horizon[h] = (pd.Series(prices.index, index=prices.index) <= CUTOFF) & (end_dates <= CUTOFF)
+              test_mask_by_horizon[h] = (pd.Series(prices.index, index=prices.index) > CUTOFF) & end_dates.notna()
+
+          candidates = []
+          total_grid_tests = 0
+          for src in UNIVERSE:
+              for dst in UNIVERSE:
+                  if src == dst:
+                      continue
+                  for threshold in THRESHOLDS:
+                      for direction in ('up', 'down'):
+                          if direction == 'up':
+                              signal = returns[src] > threshold
+                              verb = 'rises more than'
+                          else:
+                              signal = returns[src] < -threshold
+                              verb = 'falls more than'
+                          for horizon in HORIZONS:
+                              total_grid_tests += 1
+                              target_forward = prices[dst].shift(-horizon) / prices[dst] - 1
+                              train_ok = train_mask_by_horizon[horizon] & signal.notna() & target_forward.notna()
+                              test_ok = test_mask_by_horizon[horizon] & signal.notna() & target_forward.notna()
+                              train_event = train_ok & signal
+                              train_base = train_ok & ~signal
+                              if int(train_event.sum()) < MIN_TRAIN_EVENTS or int(train_base.sum()) < 100:
+                                  continue
+                              event_values = target_forward.loc[train_event]
+                              base_values = target_forward.loc[train_base]
+                              test_stat = ttest_ind(event_values, base_values, equal_var=False, nan_policy='omit')
+                              p_raw = float(test_stat.pvalue)
+                              if not math.isfinite(p_raw):
+                                  continue
+                              edge = float(event_values.mean() - base_values.mean())
+                              text = (
+                                  f'If {UNIVERSE[src]} {verb} {threshold*100:.1f}% in one session, '
+                                  f'{UNIVERSE[dst]} return over the next {horizon} aligned session(s) '
+                                  f'differs from its non-event baseline.'
+                              )
+                              candidates.append({
+                                  'source': src,
+                                  'source_name': UNIVERSE[src],
+                                  'condition': direction,
+                                  'threshold_pct': threshold * 100,
+                                  'target': dst,
+                                  'target_name': UNIVERSE[dst],
+                                  'horizon_sessions': horizon,
+                                  'hypothesis': text,
+                                  'train_event_n': int(train_event.sum()),
+                                  'train_baseline_n': int(train_base.sum()),
+                                  'train_event_mean_pct': float(event_values.mean() * 100),
+                                  'train_baseline_mean_pct': float(base_values.mean() * 100),
+                                  'train_edge_pct': edge * 100,
+                                  'train_p_raw': p_raw,
+                              })
+
+          if not candidates:
+              raise RuntimeError('No candidates met the minimum training sample rules.')
+          q_values = bh_adjust([c['train_p_raw'] for c in candidates])
+          for candidate, q in zip(candidates, q_values):
+              candidate['train_q_bh'] = float(q)
+
+          train_discoveries = [c for c in candidates if c['train_q_bh'] <= FDR_Q]
+          if train_discoveries:
+              selected = sorted(train_discoveries, key=lambda c: c['train_q_bh'])
+              selection_rule = 'All training candidates surviving Benjamini-Hochberg FDR q<=0.10'
+          else:
+              selected = sorted(candidates, key=lambda c: c['train_p_raw'])[:5]
+              selection_rule = 'No training candidate survived FDR; top 5 by training p-value shown as exploratory only'
+
+          for c in selected:
+              h = c['horizon_sessions']
+              dst, src = c['target'], c['source']
+              target_forward = prices[dst].shift(-h) / prices[dst] - 1
+              signal = returns[src] > c['threshold_pct'] / 100 if c['condition'] == 'up' else returns[src] < -c['threshold_pct'] / 100
+              test_ok = test_mask_by_horizon[h] & signal.notna() & target_forward.notna()
+              test_event = test_ok & signal
+              test_base = test_ok & ~signal
+              test_event_values = target_forward.loc[test_event]
+              test_base_values = target_forward.loc[test_base]
+              c['test_event_n'] = int(test_event.sum())
+              c['test_baseline_n'] = int(test_base.sum())
+              c['test_event_mean_pct'] = float(test_event_values.mean() * 100) if len(test_event_values) else None
+              c['test_baseline_mean_pct'] = float(test_base_values.mean() * 100) if len(test_base_values) else None
+              c['test_edge_pct'] = float((test_event_values.mean() - test_base_values.mean()) * 100) if len(test_event_values) and len(test_base_values) else None
+              c['test_directional_win_rate'] = float((test_event_values > 0).mean()) if len(test_event_values) else None
+              c['test_baseline_win_rate'] = float((test_base_values > 0).mean()) if len(test_base_values) else None
+              if len(test_event_values) >= MIN_TEST_EVENTS and len(test_base_values) >= 50:
+                  p_test = float(ttest_ind(test_event_values, test_base_values, equal_var=False, nan_policy='omit').pvalue)
+                  c['test_p_raw'] = p_test if math.isfinite(p_test) else None
+              else:
+                  c['test_p_raw'] = None
+
+          testable = [c for c in selected if c['test_p_raw'] is not None]
+          if testable:
+              q_test = bh_adjust([c['test_p_raw'] for c in testable])
+              for c, q in zip(testable, q_test):
+                  c['test_q_bh_selected'] = float(q)
+          for c in selected:
+              c.setdefault('test_q_bh_selected', None)
+              c['same_edge_sign_train_test'] = (
+                  c['test_edge_pct'] is not None and
+                  (c['train_edge_pct'] > 0) == (c['test_edge_pct'] > 0)
+              )
+
+          results = {
+              'title': 'Cross-asset hypothesis discovery pilot',
+              'period': {'aligned_start': str(prices.index.min().date()), 'aligned_end': str(prices.index.max().date()), 'train_end': str(CUTOFF.date()), 'test_start': '2021-01-01'},
+              'assets': UNIVERSE,
+              'aligned_observations': len(prices),
+              'grid': {'thresholds_pct': [x * 100 for x in THRESHOLDS], 'forward_horizons_aligned_sessions': list(HORIZONS), 'total_grid_tests': total_grid_tests, 'candidates_with_minimum_train_sample': len(candidates), 'minimum_train_events': MIN_TRAIN_EVENTS, 'minimum_test_events': MIN_TEST_EVENTS, 'fdr_q': FDR_Q},
+              'training_fdr_discoveries': len(train_discoveries),
+              'selection_rule': selection_rule,
+              'selected_candidates_with_test_holdout': selected,
+              'data_sources': 'Yahoo Finance adjusted daily closes; common-date intersection across all 10 tickers.',
+              'method': 'On training data, test each directional threshold event against non-event target forward returns with Welch two-sample t-tests, then apply Benjamini-Hochberg FDR across the full tested grid. Freeze all FDR survivors for the 2021+ holdout; if no training discovery survives, show the 5 lowest training p-values as explicitly exploratory. Apply BH again across only the frozen holdout candidates.',
+              'caveats': ['Exploratory candidate search, not a trading signal.', 'All prices are nominal: local Argentine equity returns are in ARS while US-listed ETF and commodity returns are in USD.', 'The all-ticker date intersection may skip exchange holidays; horizons mean aligned observations, not exact calendar days.', 'Daily overlapping forward returns and t-tests do not fully model serial dependence or market regimes.', 'A surviving candidate would still need economic explanation, point-in-time data checks, additional robustness tests, realistic costs and independent replication.'],
+          }
+          Path('cross_asset_discovery_results.json').write_text(json.dumps(results, indent=2))
+          pd.DataFrame(selected).to_csv('cross_asset_discovery_candidates.csv', index=False)
+          print(json.dumps(results, indent=2))
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cross-asset-discovery-pilot
+          path: |
+            cross_asset_discovery_results.json
+            cross_asset_discovery_candidates.csv
+          if-no-files-found: warn
