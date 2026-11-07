@@ -1,0 +1,94 @@
+name: Brent move vs next PAMP session
+on:
+  push:
+    paths:
+      - '.github/workflows/brent-pamp-24h.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  hypothesis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - run: pip install pandas yfinance scipy
+      - name: Test Brent moves over 10 percent vs next PAMP session
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          import pandas as pd
+          import yfinance as yf
+          from scipy.stats import fisher_exact
+
+          tickers = {'Brent': 'BZ=F', 'PAMP': 'PAMP.BA'}
+          prices = {}
+          for name, ticker in tickers.items():
+              frame = yf.download(ticker, start='2000-01-01', auto_adjust=True, progress=False, threads=False)
+              if frame.empty:
+                  raise RuntimeError(f'No historical prices returned for {ticker}')
+              close = frame['Close']
+              if isinstance(close, pd.DataFrame):
+                  close = close.iloc[:, 0]
+              close.index = pd.to_datetime(close.index).tz_localize(None).normalize()
+              prices[name] = close.rename(name)
+
+          data = pd.concat(prices.values(), axis=1, join='inner').dropna().sort_index()
+          if len(data) < 100:
+              raise RuntimeError(f'Insufficient common daily observations: {len(data)}')
+          data['brent_return'] = data['Brent'].pct_change(fill_method=None)
+          data['pamp_next_return'] = data['PAMP'].pct_change(fill_method=None).shift(-1)
+          data = data.dropna(subset=['brent_return', 'pamp_next_return'])
+          data = data.iloc[1:].copy()
+
+          cases = [
+              ('Brent up more than 10%', data['brent_return'] > 0.10),
+              ('Brent down more than 10%', data['brent_return'] < -0.10),
+              ('Either direction over 10%', data['brent_return'].abs() > 0.10),
+          ]
+          results = {}
+          for label, mask in cases:
+              sample = data.loc[mask]
+              rest = data.loc[~mask]
+              up_event = int((sample['pamp_next_return'] > 0).sum())
+              down_event = int((sample['pamp_next_return'] < 0).sum())
+              up_rest = int((rest['pamp_next_return'] > 0).sum())
+              down_rest = int((rest['pamp_next_return'] < 0).sum())
+              if len(sample):
+                  odds, p_value = fisher_exact([[up_event, down_event], [up_rest, down_rest]])
+                  results[label] = {
+                      'n_events': len(sample),
+                      'pamp_up_next_session': up_event / len(sample),
+                      'pamp_down_next_session': down_event / len(sample),
+                      'mean_pamp_next_return_pct': float(sample['pamp_next_return'].mean() * 100),
+                      'median_pamp_next_return_pct': float(sample['pamp_next_return'].median() * 100),
+                      'baseline_n': len(rest),
+                      'baseline_pamp_up': up_rest / len(rest) if len(rest) else None,
+                      'baseline_pamp_down': down_rest / len(rest) if len(rest) else None,
+                      'fisher_p_value_vs_baseline': float(p_value),
+                      'odds_ratio_for_pamp_up_vs_baseline': float(odds),
+                      'contingency_up_down': [[up_event, down_event], [up_rest, down_rest]],
+                  }
+              else:
+                  results[label] = {'n_events': 0, 'note': 'No events in the aligned sample.'}
+
+          out = {
+              'hypothesis': 'After Brent changes by more than +10% or less than -10% in one session, does PAMP rise or fall in its next available session?',
+              'period': {'start': str(data.index.min().date()), 'end': str(data.index.max().date())},
+              'aligned_observations': len(data),
+              'data_sources': {'Brent': 'Yahoo Finance BZ=F, adjusted daily close', 'PAMP': 'Yahoo Finance PAMP.BA, adjusted daily close'},
+              'method': 'Close-to-close daily returns. Signal is Brent return on date t; outcome is PAMP return at its next available aligned session (close t to next aligned close). Threshold is strict: >10% or <-10%. Fisher exact compares next-session PAMP direction after event days with all other aligned days.',
+              'results': results,
+              'caveat': 'Exploratory association only. Rare-event counts may be small; this does not establish causality, out-of-sample stability, or a tradable strategy.',
+          }
+          Path('brent_pamp_24h_results.json').write_text(json.dumps(out, indent=2))
+          print(json.dumps(out, indent=2))
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: brent-pamp-24h-results
+          path: brent_pamp_24h_results.json
+          if-no-files-found: warn
