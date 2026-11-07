@@ -51,7 +51,7 @@ jobs:
               ranked = p.loc[order].to_numpy()
               m = len(ranked)
               adjusted = (ranked * m / pd.Series(range(1, m + 1), dtype=float).to_numpy())
-              adjusted = pd.Series(adjusted).cummin().iloc[::-1].cummin().iloc[::-1].to_numpy()
+              adjusted = pd.Series(adjusted).iloc[::-1].cummin().iloc[::-1].to_numpy()
               out = pd.Series(index=p.index, dtype=float)
               out.loc[order] = adjusted.clip(0, 1)
               return out
