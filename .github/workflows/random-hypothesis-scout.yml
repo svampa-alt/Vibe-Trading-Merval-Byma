@@ -1,0 +1,34 @@
+name: Randomized hypothesis scout
+on:
+  push:
+    paths:
+      - 'research/hypothesis_search_request.json'
+permissions:
+  contents: write
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - run: pip install pandas yfinance scipy
+      - name: Select and test one unseen hypothesis
+        run: python scripts/random_hypothesis_scout.py
+      - name: Persist hypothesis result
+        if: always()
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/hypothesis_search_registry.json
+          git commit -m "Log randomized hypothesis result" || exit 0
+          git push
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: random-hypothesis-result
+          path: random_hypothesis_result.json
+          if-no-files-found: warn
