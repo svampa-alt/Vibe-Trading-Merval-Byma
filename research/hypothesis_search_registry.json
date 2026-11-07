@@ -104,14 +104,47 @@
       "test_baseline_n": 1465,
       "status": "failed_insufficient_training_sample",
       "failure_reason": "Training events or baseline are below the predeclared minimum."
+    },
+    {
+      "candidate_id": "6cb80949b839a0a0",
+      "source": "GGAL.BA",
+      "target": "ALUA.BA",
+      "direction": "down",
+      "threshold_pct": 5.0,
+      "horizon_sessions": 10,
+      "run_key": "manual-test-2026-11-06-01",
+      "seed": "manual-2026-11-06-592847",
+      "selected_at_utc": "2026-11-07T02:27:14.248564+00:00",
+      "data_source": "Yahoo Finance adjusted daily close",
+      "aligned_start": "2010-01-04",
+      "aligned_end": "2026-11-06",
+      "hypothesis": "If GGAL falls more than 5.0%, ALUA return over the next 10 aligned sessions differs from its non-event baseline.",
+      "train_event_n": 106,
+      "train_baseline_n": 2567,
+      "test_event_n": 49,
+      "test_baseline_n": 1371,
+      "status": "failed_holdout_rule",
+      "train_event_mean_pct": 2.9715445718258136,
+      "train_baseline_mean_pct": 1.5501747882193617,
+      "train_edge_pct": 1.421369783606452,
+      "train_p_raw": 0.2310522189684148,
+      "test_event_mean_pct": 3.8701461109066395,
+      "test_baseline_mean_pct": 2.6183776417497624,
+      "test_edge_pct": 1.251768469156877,
+      "test_p_raw": 0.6278968965170137,
+      "test_index_for_alpha_spending": 9,
+      "alpha_spending_boundary": 0.0005555555555555556,
+      "same_edge_sign_train_test": true,
+      "failure_reason": "Did not meet the predeclared sequential holdout threshold and same-sign rule."
     }
   ],
   "processed_run_keys": [
-    "setup-2026-11-06-01"
+    "setup-2026-11-06-01",
+    "manual-test-2026-11-06-01"
   ],
   "candidate_pool_size": 2700,
-  "candidate_pool_remaining": 2699,
-  "last_run_key": "setup-2026-11-06-01",
-  "last_updated_utc": "2026-11-07T02:24:21.160529+00:00",
+  "candidate_pool_remaining": 2698,
+  "last_run_key": "manual-test-2026-11-06-01",
+  "last_updated_utc": "2026-11-07T02:27:14.883557+00:00",
   "method": "Random selection without replacement from a predeclared pool. Every outcome, including failures, is stored. Holdout p-values use alpha spending 0.05/[i(i+1)] and must retain the training edge sign."
 }
