@@ -1,8 +1,5 @@
 name: Cross-asset hypothesis discovery pilot
 on:
-  push:
-    paths:
-      - '.github/workflows/cross-asset-discovery-pilot.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -11,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
