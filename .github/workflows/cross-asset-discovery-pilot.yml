@@ -20,9 +20,11 @@ jobs:
         run: |
           import json
           import math
+          import sys
           from pathlib import Path
           import pandas as pd
-          import yfinance as yf
+          sys.path.insert(0, 'scripts')
+          from market_data_policy import yahoo_adjusted_close
           from scipy.stats import ttest_ind
 
           UNIVERSE = {
@@ -58,14 +60,7 @@ jobs:
 
           close = {}
           for ticker in UNIVERSE:
-              frame = yf.download(ticker, start=START, auto_adjust=True, progress=False, threads=False)
-              if frame.empty:
-                  raise RuntimeError(f'No Yahoo Finance daily data for {ticker}')
-              series = frame['Close']
-              if isinstance(series, pd.DataFrame):
-                  series = series.iloc[:, 0]
-              series.index = pd.to_datetime(series.index).tz_localize(None).normalize()
-              close[ticker] = series.rename(ticker)
+              close[ticker] = yahoo_adjusted_close(ticker, start=START)
 
           prices = pd.concat(close.values(), axis=1, join='inner').dropna().sort_index()
           if len(prices) < 500:
@@ -189,7 +184,7 @@ jobs:
               'training_fdr_discoveries': len(train_discoveries),
               'selection_rule': selection_rule,
               'selected_candidates_with_test_holdout': selected,
-              'data_sources': 'Yahoo Finance adjusted daily closes; common-date intersection across all 10 tickers.',
+              'data_sources': 'Yahoo Finance auto-adjusted daily closes; OHLC-validated before common-date alignment; no source substitution.',
               'method': 'On training data, test each directional threshold event against non-event target forward returns with Welch two-sample t-tests, then apply Benjamini-Hochberg FDR across the full tested grid. Freeze all FDR survivors for the 2021+ holdout; if no training discovery survives, show the 5 lowest training p-values as explicitly exploratory. Apply BH again across only the frozen holdout candidates.',
               'caveats': ['Exploratory candidate search, not a trading signal.', 'All prices are nominal: local Argentine equity returns are in ARS while US-listed ETF and commodity returns are in USD.', 'The all-ticker date intersection may skip exchange holidays; horizons mean aligned observations, not exact calendar days.', 'Daily overlapping forward returns and t-tests do not fully model serial dependence or market regimes.', 'A surviving candidate would still need economic explanation, point-in-time data checks, additional robustness tests, realistic costs and independent replication.'],
           }
