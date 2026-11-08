@@ -21,20 +21,15 @@ jobs:
           import json
           from pathlib import Path
           import pandas as pd
-          import yfinance as yf
+          import sys
           from scipy.stats import fisher_exact
+          sys.path.insert(0, 'scripts')
+          from market_data_policy import yahoo_adjusted_close
 
           tickers = {'Brent': 'BZ=F', 'PAMP': 'PAMP.BA'}
           prices = {}
           for name, ticker in tickers.items():
-              frame = yf.download(ticker, start='2000-01-01', auto_adjust=True, progress=False, threads=False)
-              if frame.empty:
-                  raise RuntimeError(f'No historical prices returned for {ticker}')
-              close = frame['Close']
-              if isinstance(close, pd.DataFrame):
-                  close = close.iloc[:, 0]
-              close.index = pd.to_datetime(close.index).tz_localize(None).normalize()
-              prices[name] = close.rename(name)
+              prices[name] = yahoo_adjusted_close(ticker, start='2000-01-01').rename(name)
 
           data = pd.concat(prices.values(), axis=1, join='inner').dropna().sort_index()
           if len(data) < 100:
@@ -90,7 +85,7 @@ jobs:
               'hypothesis': 'After Brent changes by more than +10% or less than -10% in one session, does PAMP rise or fall in its next available session?',
               'period': {'start': str(data.index.min().date()), 'end': str(data.index.max().date())},
               'aligned_observations': len(data),
-              'data_sources': {'Brent': 'Yahoo Finance BZ=F, adjusted daily close', 'PAMP': 'Yahoo Finance PAMP.BA, adjusted daily close'},
+              'data_sources': {'Brent': 'Yahoo Finance BZ=F auto-adjusted daily Close, OHLC-validated', 'PAMP': 'Yahoo Finance PAMP.BA auto-adjusted daily Close, OHLC-validated'},
               'method': 'Close-to-close daily returns. Signal is Brent return on date t; outcome is PAMP return at its next available aligned session (close t to next aligned close). Threshold is strict: >10% or <-10%. Direction percentages use all observations, including unchanged closes. Fisher exact compares up vs down only, excluding unchanged closes in both groups.',
               'results': results,
               'caveat': 'Exploratory association only. Rare-event counts may be small; this does not establish causality, out-of-sample stability, or a tradable strategy.',
