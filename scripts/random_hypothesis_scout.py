@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
-import yfinance as yf
+from market_data_policy import yahoo_adjusted_close
 from scipy.stats import ttest_ind
 
 REQUEST_PATH = Path("research/hypothesis_search_request.json")
@@ -61,20 +61,13 @@ def main():
         "run_key": run_key,
         "seed": str(request["seed"]),
         "selected_at_utc": datetime.now(timezone.utc).isoformat(),
-        "data_source": "Yahoo Finance adjusted daily close",
+        "data_source": "Yahoo Finance adjusted daily Close (auto_adjust=True); OHLC-validated",
     }
 
     try:
         series = {}
         for ticker in (candidate["source"], candidate["target"]):
-            frame = yf.download(ticker, start="2010-01-01", auto_adjust=True,
-                                progress=False, threads=False)
-            if frame.empty:
-                raise RuntimeError(f"No historical price data for {ticker}")
-            close = frame["Close"]
-            if isinstance(close, pd.DataFrame):
-                close = close.iloc[:, 0]
-            close.index = pd.to_datetime(close.index).tz_localize(None).normalize()
+            close = yahoo_adjusted_close(ticker, start="2010-01-01")
             series[ticker] = close.rename(ticker)
 
         pair = pd.concat(series.values(), axis=1, join="inner").dropna().sort_index()
