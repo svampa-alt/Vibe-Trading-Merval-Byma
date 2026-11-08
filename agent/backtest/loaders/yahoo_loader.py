@@ -21,6 +21,7 @@ import datetime as dt
 import logging
 from typing import Dict, List, Optional
 
+import numpy as np
 import pandas as pd
 
 from backtest.loaders import yahoo_client
@@ -177,6 +178,18 @@ def _rows_to_frame(
     frame = frame.loc[:, list(_OHLCV_COLUMNS)].apply(pd.to_numeric, errors="coerce")
     frame["volume"] = frame["volume"].fillna(0.0)
     frame = frame.dropna(subset=["open", "high", "low", "close"])
+    if frame.index.has_duplicates:
+        duplicate_count = int(frame.index.duplicated(keep=False).sum())
+        raise ValueError(f"Yahoo returned {duplicate_count} duplicate OHLCV bars")
+    ohlc = frame[["open", "high", "low", "close"]]
+    values = ohlc.to_numpy(dtype=float)
+    valid = np.isfinite(values).all(axis=1)
+    valid &= ohlc["high"].to_numpy() >= ohlc[["open", "close", "low"]].max(axis=1).to_numpy()
+    valid &= ohlc["low"].to_numpy() <= ohlc[["open", "close", "high"]].min(axis=1).to_numpy()
+    invalid_count = int((~valid).sum())
+    if invalid_count:
+        logger.warning("yahoo OHLC quality gate excluded %d malformed bars", invalid_count)
+    frame = frame.loc[valid]
 
     lower = pd.Timestamp(start_date).normalize()
     upper = pd.Timestamp(end_date).normalize() + pd.Timedelta(days=1)
