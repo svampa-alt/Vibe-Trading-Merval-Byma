@@ -117,6 +117,8 @@ Open **Run Detail** to compare the crossover with buy-and-hold, inspect the trad
 
 ## 🧪 Research Workflow
 
+For Bolsa studies and market-data tools, follow the [canonical Yahoo daily data and validation policy](research/MARKET_DATA_POLICY.md); the shared `.BA` router fails closed instead of substituting another historical-price source.
+
 | Step | In the crossover example |
 |---|---|
 | Plan | Identify the trading pair, date range, moving averages and benchmark from the prompt. |
