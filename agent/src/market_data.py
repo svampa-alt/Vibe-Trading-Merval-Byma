@@ -302,7 +302,15 @@ def fetch_market_data(
         # local:/tickerall/fmp keep their no-network entry point
         # (explicit fmp must not silently return yahoo on Stable 403 — issue #1270).
         # Sources in _NO_NETWORK_FALLBACK_SOURCES never walk the chain.
-        if src in _NO_NETWORK_FALLBACK_SOURCES:
+        # Bolsa Argentina daily data is canonicalized to Yahoo. If Yahoo fails or
+        # returns no usable bars, do not silently backfill from another provider.
+        argentina_yahoo_only = (
+            source == "auto"
+            and src == "yahoo"
+            and bool(src_codes)
+            and all(code.strip().upper().endswith(".BA") for code in src_codes)
+        )
+        if src in _NO_NETWORK_FALLBACK_SOURCES or argentina_yahoo_only:
             candidates = [src]
             override = None
         else:
