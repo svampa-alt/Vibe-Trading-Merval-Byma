@@ -18,9 +18,11 @@ jobs:
       - name: Test SUPV relative strength vs next risk-country move
         shell: python
         run: |
-          import json, requests, pandas as pd, yfinance as yf
+          import json, requests, pandas as pd, sys
           from scipy.stats import fisher_exact
           from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from market_data_policy import yahoo_adjusted_close
           url='https://api.argentinadatos.com/v1/finanzas/indices/riesgo-pais'
           response=requests.get(url,timeout=40); response.raise_for_status()
           raw=response.json()
@@ -38,12 +40,7 @@ jobs:
           tickers=['SUPV.BA','^MERV','GGAL.BA','BMA.BA']
           prices={}
           for ticker in tickers:
-              frame=yf.download(ticker,start='2018-01-01',end=end,auto_adjust=True,progress=False,threads=False)
-              if frame.empty: raise RuntimeError(f'No prices for {ticker}')
-              close=frame['Close']
-              if isinstance(close,pd.DataFrame): close=close.iloc[:,0]
-              close.index=pd.to_datetime(close.index).tz_localize(None).normalize()
-              prices[ticker]=close.rename(ticker)
+              prices[ticker]=yahoo_adjusted_close(ticker,start='2018-01-01',end=end)
           merged=pd.concat([*prices.values(),risk['risk']],axis=1,join='inner').dropna().sort_index()
           if len(merged)<150: raise RuntimeError(f'Insufficient common observations: {len(merged)}')
           returns=merged[tickers].pct_change(fill_method=None)
@@ -61,7 +58,7 @@ jobs:
               d=int((~valid.signal & ~valid.risk_down_next).sum())
               odds,p=fisher_exact([[a,b],[c,d]])
               results[ticker]={'observations':len(valid),'signal_days':a+b,'p_down_given_signal':a/(a+b) if a+b else None,'p_down_without_signal':c/(c+d) if c+d else None,'fisher_p_value':p,'odds_ratio':odds,'contingency':[[a,b],[c,d]]}
-          out={'hypothesis':'Bank outperforms Merval today -> risk country falls next observation','start':str(merged.index.min().date()),'end':str(merged.index.max().date()),'data_sources':{'prices':'Yahoo Finance yfinance adjusted daily','risk_country':url},'alignment':'intersection of dates; next observed risk-country point','results':results,'caveat':'Exploratory association, not causal or tradable signal. Check out-of-sample and fees.'}
+          out={'hypothesis':'Bank outperforms Merval today -> risk country falls next observation','start':str(merged.index.min().date()),'end':str(merged.index.max().date()),'data_sources':{'prices':'Yahoo Finance auto-adjusted daily Close, OHLC-validated','risk_country':url},'alignment':'intersection of dates; next observed risk-country point','results':results,'caveat':'Exploratory association, not causal or tradable signal. Check out-of-sample and fees.'}
           Path('supv_riesgo_pais_results.json').write_text(json.dumps(out,indent=2))
           print(json.dumps(out,indent=2))
       - uses: actions/upload-artifact@v4
