@@ -18,11 +18,13 @@ def _one_column(frame: pd.DataFrame, field: str, ticker: str) -> pd.Series:
 
 
 def yahoo_adjusted_close(ticker: str, *, start: str, end: str | None = None) -> pd.Series:
-    """Return Yahoo's dividend/split-adjusted daily close after OHLC validation.
+    """Return Yahoo's adjusted daily close after OHLC validation.
 
-    Malformed price bars are excluded and counted in the returned Series.attrs.
-    If Yahoo has no valid bars, fail closed so research cannot substitute another
-    provider without an explicit change to the project rule.
+    Yahoo is the primary historical source. Malformed rows are excluded and
+    counted in Series.attrs. This loader does not retrieve fallback providers;
+    callers must fill Yahoo gaps only from individually validated, adjustment-
+    compatible IOL rows or another independent verified source, recording
+    provenance. If no source passes validation, the date remains unavailable.
     """
     frame = yf.download(
         ticker,
