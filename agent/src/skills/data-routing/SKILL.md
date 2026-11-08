@@ -106,6 +106,7 @@ same-market sources automatically. Only set a concrete source when the user asks
 - **HK stocks**: tencent (never banned, daily) > eastmoney / yahoo > futu (local
   OpenD) > akshare (Eastmoney-backed, daily only) > yfinance > tushare
   (`TUSHARE_TOKEN`) / longbridge (key-gated).
+- **Argentina (BYMA equities and CEDEARs)**: Yahoo Finance `.BA` is the required final daily source. If Yahoo fails or yields no valid bars, report unavailable/insufficient; do not fall back to IOL or another provider for daily history.
 - **Canada (TSX/TSXV)**: yahoo > yfinance > local; use Yahoo's canonical
   `.TO` / `.V` suffixes (for example `TD.TO`, `PNG.V`).
 - **Crypto**: okx (single exchange) > ccxt (multi-exchange).
@@ -118,6 +119,7 @@ same-market sources automatically. Only set a concrete source when the user asks
 |--------|--------|----------|
 | A-shares | `NNNNNN.SZ/SH/BJ` | 000001.SZ, 600000.SH, 430139.BJ |
 | US stocks | `TICKER.US` | AAPL.US, MSFT.US |
+| Argentina BYMA stocks / CEDEARs | `TICKER.BA` | ALUA.BA, EWZ.BA |
 | HK stocks | `NNNNN.HK` | 00700.HK, 09988.HK |
 | Canada TSX / TSXV | `TICKER.TO` / `TICKER.V` | TD.TO, BBD-B.TO, PNG.V |
 | Crypto | `SYMBOL-USDT` | BTC-USDT, ETH-USDT |
@@ -138,6 +140,10 @@ same-market sources automatically. Only set a concrete source when the user asks
   is unavailable — route to a free same-market source instead of erroring out.
 - A single failing symbol or transient HTTP error is reported inside the envelope;
   it never aborts the surrounding batch.
+
+## Bolsa Yahoo daily source rule
+
+For all Bolsa experiments and tools, use Yahoo Finance as the final historical daily price series whenever its OHLC bars pass validation. Keep adjusted and raw price calibers separate; use adjusted daily Close (`auto_adjust=True`) consistently for returns. A Yahoo-unavailable or invalid series is recorded as unavailable/insufficient, without silent fallback. IOL remains a separate source for explicitly intraday bid/ask and depth; broker fills remain the source for actual transactions. See [research/MARKET_DATA_POLICY.md](../../../research/MARKET_DATA_POLICY.md).
 
 ## Data Verification Discipline
 
