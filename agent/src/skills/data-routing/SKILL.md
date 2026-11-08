@@ -143,7 +143,7 @@ same-market sources automatically. Only set a concrete source when the user asks
 
 ## Bolsa Yahoo daily source rule
 
-For all Bolsa experiments and tools, use Yahoo Finance as the final historical daily price series whenever its OHLC bars pass validation. Keep adjusted and raw price calibers separate; use adjusted daily Close (`auto_adjust=True`) consistently for returns. A Yahoo-unavailable or invalid series is recorded as unavailable/insufficient, without silent fallback. IOL remains a separate source for explicitly intraday bid/ask and depth; broker fills remain the source for actual transactions. See [research/MARKET_DATA_POLICY.md](../../../research/MARKET_DATA_POLICY.md).
+For all Bolsa experiments and tools, use Yahoo Finance as the final historical daily price series whenever its OHLC bars pass validation. Keep adjusted and raw price calibers separate; use adjusted daily Close (`auto_adjust=True`) consistently for returns. A Yahoo-unavailable or invalid series is recorded as unavailable/insufficient, without silent fallback. IOL remains a separate source for explicitly intraday bid/ask and depth; broker fills remain the source for actual transactions. See [research/MARKET_DATA_POLICY.md](../../../../research/MARKET_DATA_POLICY.md).
 
 ## Data Verification Discipline
 
