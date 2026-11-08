@@ -4,9 +4,9 @@ Effective 2026-11-08 across Bolsa experiments and tools in this repository.
 
 ## Canonical daily series
 
-Yahoo Finance is the required final source for historical daily price bars and closing-price analysis whenever Yahoo returns a usable series. Download with `auto_adjust=True`; this produces a consistent split/dividend-adjusted close series for return calculations. Do not mix it with raw closes or silently replace it with another provider.
+Yahoo Finance is the primary source for historical daily price bars and closing-price analysis when its rows pass validation. Download with `auto_adjust=True` and keep that split/dividend-adjusted basis consistent. If a Yahoo date is missing or invalid, fill that date from IOL only when the IOL row independently passes validation and is adjustment-compatible; otherwise search for another independent, verified source. Record source and adjustment per ticker/date, preserve raw inputs, and never mix adjustment bases without explicit normalization.
 
-Before analysis, validate each Yahoo daily bar: all OHLC values must be finite and positive, dates must be unique, and high/low must contain open and close. Exclude malformed bars and report their count in the workflow log. If Yahoo is unavailable, returns no valid bars, or the remaining sample fails the predeclared minimum, mark the result unavailable/insufficient. Do not fill the gap with IOL or another source.
+Before analysis, validate each source row: OHLC values must be finite and positive, dates unique, and high/low must contain open and close. Exclude malformed rows and report them. Keep Yahoo wherever its row is valid; use a verified, compatible fallback only for the individual missing/invalid Yahoo date. If no source passes, mark that date unavailable; do not invent or forward-fill. The predeclared minimum still applies after fallback.
 
 ## Separate intraday quotes and actual transactions
 
