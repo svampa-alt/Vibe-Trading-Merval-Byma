@@ -278,6 +278,38 @@
       "data_source": "Yahoo Finance adjusted daily Close (auto_adjust=True); OHLC-validated",
       "status": "failed_data_or_execution",
       "failure_reason": "Only 63 aligned observations for this pair"
+    },
+    {
+      "candidate_id": "6a397eb820447e57",
+      "source": "GGAL.BA",
+      "target": "EWZ",
+      "direction": "up",
+      "threshold_pct": 3.0,
+      "horizon_sessions": 2,
+      "run_key": "auto-2026-11-09T2302Z-74c9e1b5",
+      "seed": "seed-2026-11-09-2302-d3a7608f",
+      "selected_at_utc": "2026-11-09T23:03:26.529724+00:00",
+      "data_source": "Yahoo Finance adjusted daily Close (auto_adjust=True); OHLC-validated",
+      "aligned_start": "2010-01-04",
+      "aligned_end": "2026-11-06",
+      "hypothesis": "If GGAL rises more than 3.0%, Brazil ETF return over the next 2 aligned sessions differs from its non-event baseline.",
+      "train_event_n": 402,
+      "train_baseline_n": 2177,
+      "test_event_n": 260,
+      "test_baseline_n": 1131,
+      "status": "failed_holdout_rule",
+      "train_event_mean_pct": -0.028775839627247148,
+      "train_baseline_mean_pct": 0.02146050670769713,
+      "train_edge_pct": -0.05023634633494428,
+      "train_p_raw": 0.773749444716876,
+      "test_event_mean_pct": 0.034567373511398054,
+      "test_baseline_mean_pct": 0.08220555646410704,
+      "test_edge_pct": -0.04763818295270898,
+      "test_p_raw": 0.7959605216508988,
+      "test_index_for_alpha_spending": 15,
+      "alpha_spending_boundary": 0.00020833333333333335,
+      "same_edge_sign_train_test": true,
+      "failure_reason": "Did not meet the predeclared sequential holdout threshold and same-sign rule."
     }
   ],
   "processed_run_keys": [
@@ -287,11 +319,12 @@
     "manual-2026-11-07T2305Z-xkrf8iec8tgmw70g2k5",
     "auto-2026-11-08T1102Z-9f3c1a7e",
     "auto-2026-11-08T2304Z-c81f7a2d",
-    "auto-2026-11-09T1058Z-2d8a6c41"
+    "auto-2026-11-09T1058Z-2d8a6c41",
+    "auto-2026-11-09T2302Z-74c9e1b5"
   ],
   "candidate_pool_size": 2700,
-  "candidate_pool_remaining": 2693,
-  "last_run_key": "auto-2026-11-09T1058Z-2d8a6c41",
-  "last_updated_utc": "2026-11-09T10:59:22.898918+00:00",
+  "candidate_pool_remaining": 2692,
+  "last_run_key": "auto-2026-11-09T2302Z-74c9e1b5",
+  "last_updated_utc": "2026-11-09T23:03:27.235425+00:00",
   "method": "Random selection without replacement from a predeclared pool. Every outcome, including failures, is stored. Holdout p-values use alpha spending 0.05/[i(i+1)] and must retain the training edge sign."
 }
