@@ -1,6 +1,9 @@
 name: Bolsa - fuentes compartidas Data912 BYMA
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/bolsa-fuentes-externas.yml'
   schedule:
     - cron: '30 22 * * 1-5'
 permissions:
