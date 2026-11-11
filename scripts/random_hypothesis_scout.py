@@ -30,36 +30,11 @@ def candidate_id(src, dst, direction, threshold, horizon):
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
-def main():
-    request = json.loads(REQUEST_PATH.read_text())
-    registry = json.loads(REGISTRY_PATH.read_text())
-    run_key = str(request["run_key"])
-    if run_key in registry.get("processed_run_keys", []):
-        raise RuntimeError(f"Duplicate request run_key: {run_key}")
-
-    pool = []
-    for src in UNIVERSE:
-        for dst in UNIVERSE:
-            if src == dst:
-                continue
-            for direction in ("up", "down"):
-                for threshold in THRESHOLDS:
-                    for horizon in HORIZONS:
-                        pool.append({
-                            "candidate_id": candidate_id(src, dst, direction, threshold, horizon),
-                            "source": src, "target": dst, "direction": direction,
-                            "threshold_pct": threshold, "horizon_sessions": horizon,
-                        })
-    seen = {r["candidate_id"] for r in registry.get("records", [])}
-    untried = [c for c in pool if c["candidate_id"] not in seen]
-    if not untried:
-        raise RuntimeError("Candidate pool exhausted; no repeat was made.")
-    rng = random.Random(str(request["seed"]))
-    candidate = rng.choice(untried)
+def evaluate(candidate, run_key, seed, test_index, closes):
     record = {
         **candidate,
         "run_key": run_key,
-        "seed": str(request["seed"]),
+        "seed": seed,
         "selected_at_utc": datetime.now(timezone.utc).isoformat(),
         "data_source": "Yahoo Finance adjusted daily Close (auto_adjust=True); OHLC-validated",
     }
@@ -67,8 +42,9 @@ def main():
     try:
         series = {}
         for ticker in (candidate["source"], candidate["target"]):
-            close = yahoo_adjusted_close(ticker, start="2010-01-01")
-            series[ticker] = close.rename(ticker)
+            if ticker not in closes:
+                closes[ticker] = yahoo_adjusted_close(ticker, start="2010-01-01").rename(ticker)
+            series[ticker] = closes[ticker]
 
         pair = pd.concat(series.values(), axis=1, join="inner").dropna().sort_index()
         if len(pair) < 250:
@@ -125,7 +101,6 @@ def main():
             train_edge = float((train_event_values.mean() - train_base_values.mean()) * 100)
             test_edge = float((test_event_values.mean() - test_base_values.mean()) * 100)
             # A summable alpha-spending rule limits false positives across repeated daily searches.
-            test_index = int(registry.get("prior_confirmatory_tests", 0)) + len(registry.get("records", [])) + 1
             alpha_boundary = 0.05 / (test_index * (test_index + 1))
             same_sign = (train_edge > 0) == (test_edge > 0)
             passed = math.isfinite(p_test) and p_test <= alpha_boundary and same_sign
@@ -150,12 +125,50 @@ def main():
             "failure_reason": str(exc),
         })
 
-    registry.setdefault("records", []).append(record)
+    return record
+
+
+def main():
+    request = json.loads(REQUEST_PATH.read_text())
+    registry = json.loads(REGISTRY_PATH.read_text())
+    run_key = str(request["run_key"])
+    if run_key in registry.get("processed_run_keys", []):
+        raise RuntimeError(f"Duplicate request run_key: {run_key}")
+
+    pool = []
+    for src in UNIVERSE:
+        for dst in UNIVERSE:
+            if src == dst:
+                continue
+            for direction in ("up", "down"):
+                for threshold in THRESHOLDS:
+                    for horizon in HORIZONS:
+                        pool.append({
+                            "candidate_id": candidate_id(src, dst, direction, threshold, horizon),
+                            "source": src, "target": dst, "direction": direction,
+                            "threshold_pct": threshold, "horizon_sessions": horizon,
+                        })
+    seen = {r["candidate_id"] for r in registry.get("records", [])}
+    untried = [c for c in pool if c["candidate_id"] not in seen]
+    if not untried:
+        raise RuntimeError("Candidate pool exhausted; no repeat was made.")
+    seed = str(request["seed"])
+    rng = random.Random(seed)
+    candidates = rng.sample(untried, k=min(10, len(untried)))
+    history = registry.setdefault("records", [])
+    prior_tests = int(registry.get("prior_confirmatory_tests", 0))
+    closes = {}
+    records = []
+    for candidate in candidates:
+        record = evaluate(candidate, run_key, seed, prior_tests + len(history) + 1, closes)
+        history.append(record)
+        records.append(record)
+
     registry.setdefault("processed_run_keys", []).append(run_key)
     registry["last_run_key"] = run_key
     registry["last_updated_utc"] = datetime.now(timezone.utc).isoformat()
     registry["candidate_pool_size"] = len(pool)
-    registry["candidate_pool_remaining"] = max(0, len(untried) - 1)
+    registry["candidate_pool_remaining"] = len(untried) - len(records)
     registry["method"] = (
         "Random selection without replacement from a predeclared pool. "
         "Every outcome, including failures, is stored. Holdout p-values use "
@@ -164,7 +177,7 @@ def main():
     REGISTRY_PATH.write_text(json.dumps(registry, indent=2))
     result = {
         "run_key": run_key,
-        "candidate": record,
+        "candidates": records,
         "candidate_pool_size": len(pool),
         "candidate_pool_remaining": registry["candidate_pool_remaining"],
         "caveat": (
