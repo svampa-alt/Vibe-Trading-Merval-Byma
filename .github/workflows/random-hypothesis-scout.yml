@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install pandas yfinance scipy
-      - name: Select and test one unseen hypothesis
+      - name: Select and test unseen hypotheses
         run: python scripts/random_hypothesis_scout.py
       - name: Persist hypothesis result
         if: always()
@@ -31,4 +31,4 @@ jobs:
         with:
           name: random-hypothesis-result
           path: random_hypothesis_result.json
-          if-no-files-found: warn
+          if-no-files-found: error
