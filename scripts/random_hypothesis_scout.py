@@ -1,4 +1,5 @@
 import hashlib
+from collections import Counter
 import json
 import math
 import random
@@ -154,7 +155,9 @@ def main():
         raise RuntimeError("Candidate pool exhausted; no repeat was made.")
     seed = str(request["seed"])
     rng = random.Random(seed)
-    candidates = rng.sample(untried, k=min(10, len(untried)))
+    run_all_remaining = request.get("all_remaining") is True
+    batch_size = len(untried) if run_all_remaining else min(10, len(untried))
+    candidates = rng.sample(untried, k=batch_size)
     history = registry.setdefault("records", [])
     prior_tests = int(registry.get("prior_confirmatory_tests", 0))
     closes = {}
@@ -187,7 +190,16 @@ def main():
         ),
     }
     Path("random_hypothesis_result.json").write_text(json.dumps(result, indent=2))
-    print(json.dumps(result, indent=2))
+    if run_all_remaining:
+        print(json.dumps({
+            "run_key": run_key,
+            "evaluated": len(records),
+            "unique_candidates": len({record["candidate_id"] for record in records}),
+            "candidate_pool_remaining": result["candidate_pool_remaining"],
+            "statuses": dict(Counter(record["status"] for record in records)),
+        }, indent=2))
+    else:
+        print(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":
